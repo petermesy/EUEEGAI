@@ -18,7 +18,7 @@ genai.configure(api_key=API_URL)
 model_gemini = genai.GenerativeModel("gemini-2.0-flash")
 
 # --- Load model and points ---
-model = SentenceTransformer("paraphrase-multilingual-mpnet-base-v2")
+model = SentenceTransformer("paraphrase-MiniLM-L6-v2")
 with open("./asset_/Geography_history_questions_points.pkl", "rb") as f:
     points = pickle.load(f)
 print(f"Loaded model and {len(points)} points.")
