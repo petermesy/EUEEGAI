@@ -1,6 +1,5 @@
-from fastapi import FastAPI, Request
-from pydantic import BaseModel
-import json
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 import pickle
 from sentence_transformers import SentenceTransformer
 from vector_search import local_similarity_search
@@ -13,11 +12,11 @@ import os
 load_dotenv()
 API_URL = os.getenv("GEMNIE_API_KEY")
 
-# --- Gemini API Setup ---
+# Gemini API Setup
 genai.configure(api_key=API_URL)
 model_gemini = genai.GenerativeModel("gemini-2.0-flash")
 
-# --- Load model and points ---
+# Load model and points (use the smallest model)
 model = SentenceTransformer("paraphrase-MiniLM-L6-v2")
 with open("./asset_/Geography_history_questions_points.pkl", "rb") as f:
     points = pickle.load(f)
@@ -40,7 +39,7 @@ def build_gemini_prompt(results):
         )
     prompt = f"""You are a smart educational assistant. Given the following context of multiple-choice questions, do the following for each question:
 
-- **Never skip any question**. For every question in the context, always return a result.
+- Never skip any question. For every question in the context, always return a result.
 - If the question text, options, correct answer, or explanation is missing or incomplete, deduce and fill it in based on the available information.
 - For each question, return:
     - The full, improved question text
@@ -49,21 +48,6 @@ def build_gemini_prompt(results):
     - The correct answer clearly stated (with the corresponding letter)
     - A clear explanation of at least 3 lines justifying the correct answer
     - The source (as provided in the context)
-
-Question 1: 
-[Full question text]
-
-A) [Option A]
-B) [Option B]
-C) [Option C]
-D) [Option D]
-
-Correct Answer: [Letter]
-Explanation: [At least 3 lines]
-
-Source: [Source]
-
-[Repeat for all questions. Do not skip any question.]
 
 Questions:
 {context}
@@ -90,14 +74,13 @@ def extract_limit_from_query(query, default=10, max_limit=None):
             return limit
     return default
 
-app = FastAPI()
+app = Flask(__name__)
+CORS(app)
 
-class QueryRequest(BaseModel):
-    query: str
-
-@app.post("/answer")
-async def get_answer(request: QueryRequest):
-    query = request.query
+@app.route("/answer", methods=["POST"])
+def get_answer():
+    data = request.get_json()
+    query = data.get("query", "")
     max_limit = len(points)
     limit = extract_limit_from_query(query, default=10, max_limit=max_limit)
 
@@ -112,21 +95,19 @@ async def get_answer(request: QueryRequest):
     ] if subject_in_query else results
 
     if not filtered_results:
-        return {"answer": "I don't have any questions related to this query."}
+        return jsonify({"answer": "I don't have any questions related to this query."})
     else:
         prompt = build_gemini_prompt(filtered_results)
         try:
             response = model_gemini.generate_content(prompt)
-            return {"answer": response.text.strip()}
+            return jsonify({"answer": response.text.strip()})
         except Exception as e:
-            return {"answer": f"Error generating response: {e}"}
+            return jsonify({"answer": f"Error generating response: {e}"})
 
-@app.get("/")
-def read_root():
-    return {"message": "EUEE AI backend is running!"}
-import os
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({"message": "EUEE AI backend is running!"})
 
 if __name__ == "__main__":
-    import uvicorn
     port = int(os.environ.get("PORT", 10000))
-    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=False)
+    app.run(host="0.0.0.0", port=port)
