@@ -1,12 +1,18 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+import os
 import pickle
+import re
+from flask import Flask, request, jsonify
 from sentence_transformers import SentenceTransformer
 from vector_search import local_similarity_search
 import google.generativeai as genai
-import re
 from dotenv import load_dotenv
-import os
+
+# Set thread/env vars before imports (limits memory usage)
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 # Load environment variables
 load_dotenv()
@@ -16,7 +22,7 @@ API_URL = os.getenv("GEMNIE_API_KEY")
 genai.configure(api_key=API_URL)
 model_gemini = genai.GenerativeModel("gemini-2.0-flash")
 
-# Load model and points (use the smallest model)
+# Load model and points ONCE at startup (not per request)
 model = SentenceTransformer("paraphrase-MiniLM-L6-v2")
 with open("./asset_/Geography_history_questions_points.pkl", "rb") as f:
     points = pickle.load(f)
@@ -75,7 +81,6 @@ def extract_limit_from_query(query, default=10, max_limit=None):
     return default
 
 app = Flask(__name__)
-CORS(app)
 
 @app.route("/answer", methods=["POST"])
 def get_answer():
@@ -105,7 +110,7 @@ def get_answer():
             return jsonify({"answer": f"Error generating response: {e}"})
 
 @app.route("/", methods=["GET"])
-def home():
+def read_root():
     return jsonify({"message": "EUEE AI backend is running!"})
 
 if __name__ == "__main__":
